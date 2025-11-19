@@ -1,0 +1,102 @@
+/* uni-app 样式系统 */
+
+/* 基础样式 */
+body {
+  background-color: #f4f4f4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* flex 布局 */
+.ss-flex {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ss-flex-1 {
+  flex: 1;
+}
+
+.ss-col-top {
+  align-items: flex-start;
+}
+
+.ss-row-between {
+  justify-content: space-between;
+}
+
+.ss-row-around {
+  justify-content: space-around;
+}
+
+/* 宽高 */
+.ss-w-100 {
+  width: 100%;
+}
+
+/* 边距 */
+.ss-p-30 {
+  padding: 15px;
+}
+
+.ss-m-t-24 {
+  margin-top: 12px;
+}
+
+.ss-m-t-48 {
+  margin-top: 24px;
+}
+
+.ss-m-l-8 {
+  margin-left: 4px;
+}
+
+/* 字体 */
+.ss-font-28 {
+  font-size: 14px;
+}
+
+.ss-font-25 {
+  font-size: 12.5px;
+}
+
+/* 颜色 */
+.bg-color-white {
+  background-color: #fff !important;
+}
+
+.bg-color-green {
+  background-color: #67c23a !important;
+}
+
+.font-color-title {
+  color: #172633;
+}
+
+/* 盒子阴影 */
+.box-shadow {
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+/* 边框 */
+.borde-b-e {
+  border-bottom: 1px solid #eee;
+}
+
+/* hover效果 */
+.ss-hover-class {
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.ss-hover-class:hover:not(.submitting) {
+  opacity: 0.8;
+}
+
+.ss-hover-class.submitting {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
