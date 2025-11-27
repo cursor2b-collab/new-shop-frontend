@@ -5,7 +5,7 @@
     <!-- 导航标签栏 -->
     <div class="nav-tabs">
       <div class="nav-tab" @click="$router.push('/')">首页</div>
-      <div class="nav-tab" @click="$router.push('/recharge')">充值</div>
+      <div class="nav-tab" @click="handleRechargeClick">充值</div>
       <div class="nav-tab active">我的订单</div>
       <div class="nav-tab" @click="$router.push('/account')">账户</div>
       <div class="nav-tab" @click="handleApiClick">API接口</div>
@@ -105,8 +105,8 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-// Banner图片
-const bannerImage = ref('https://jm273.cc/static/images/be7fa42546e73d642a19b19a8dcb6fa4.gif')
+// Banner图片 - 使用指定的GIF图片
+const bannerImage = ref('https://cy-747263170.imgix.net/GIF_20251120065910817.gif')
 
 // 表格样式
 const tableStyle = ref({
@@ -132,6 +132,19 @@ const tableStyle = ref({
   '--n-td-color-striped-modal': 'rgba(250,250,252,1)',
   '--n-td-color-striped-popover': 'rgba(250,250,252,1)'
 })
+
+// 处理充值点击
+const handleRechargeClick = () => {
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请登录账号')
+    router.push('/account')
+  } else {
+    router.push('/recharge')
+  }
+}
 
 // 处理API接口点击
 const handleApiClick = () => {

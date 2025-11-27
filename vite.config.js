@@ -12,17 +12,17 @@ export default defineConfig({
   server: {
     proxy: {
       '/payment-config': {
-        target: 'https://sisn113.cc',
+        target: 'https://vps.boltcode.vip',
         changeOrigin: true,
         secure: false
       },
       '/api': {
-        target: 'https://sisn113.cc',
+        target: 'https://vps.boltcode.vip',
         changeOrigin: true,
         secure: false
       },
       '/custom-payment': {
-        target: 'https://sisn113.cc',
+        target: 'https://vps.boltcode.vip',
         changeOrigin: true,
         secure: false
       }

@@ -226,8 +226,8 @@ import { supabase } from '../lib/supabase'
 
 const router = useRouter()
 
-// Banner图片
-const bannerImage = ref('https://jm273.cc/static/images/be7fa42546e73d642a19b19a8dcb6fa4.gif')
+// Banner图片 - 使用指定的GIF图片
+const bannerImage = ref('https://cy-747263170.imgix.net/GIF_20251120065910817.gif')
 
 // 国家列表
 const countries = ref([

@@ -5,7 +5,7 @@
     <!-- 导航标签栏 -->
     <div class="nav-tabs">
       <div class="nav-tab active">首页</div>
-      <div class="nav-tab" @click="$router.push('/recharge')">充值</div>
+      <div class="nav-tab" @click="handleRechargeClick">充值</div>
       <div class="nav-tab" @click="$router.push('/orders')">我的订单</div>
       <div class="nav-tab" @click="$router.push('/account')">账户</div>
       <div class="nav-tab" @click="handleApiClick">API接口</div>
@@ -25,7 +25,7 @@
               <span class="el-tag el-tag--large el-tag--light merchant-tag">
                 <span class="el-tag__content">商户名称</span>
               </span>
-              企鹅接码
+              米奇接码
             </td>
           </tr>
           <tr>
@@ -57,7 +57,7 @@
               <span class="el-tag el-tag--large el-tag--light merchant-tag">
                 <span class="el-tag__content">商户介绍</span>
               </span>
-              企鹅接码为保护用户隐私提供海量国外手机号码,接码就要找企鹅！
+              米奇接码为保护用户隐私提供海量国外手机号码,接码就要找米奇！
             </td>
           </tr>
         </tbody>
@@ -199,11 +199,12 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
+import { loadCashierDomains, navigateToCashier } from '../config/cashier.js'
 
 const router = useRouter()
 
-// Banner图片 - 使用已有的图片
-const bannerImage = ref('https://jm273.cc/static/images/be7fa42546e73d642a19b19a8dcb6fa4.gif')
+// Banner图片 - 使用指定的GIF图片
+const bannerImage = ref('https://cy-747263170.imgix.net/GIF_20251120065910817.gif')
 
 // 表格样式
 const tableStyle = ref({
@@ -245,9 +246,7 @@ const dailiInfo = ref({
 
 // 生成带有 Telegram 用户名的客服链接
 const telegramCustomerLink = computed(() => {
-  const baseUrl = dailiInfo.value.username 
-    ? `https://t.me/${dailiInfo.value.username}` 
-    : shopConfig.value.telegram_customer_service
+  const baseUrl = 'https://t.me/nnnqqq'
   
   const tgUsername = sessionStorage.getItem('tg_username')
   if (tgUsername && baseUrl) {
@@ -432,6 +431,19 @@ const selectService = (service) => {
   showServiceDropdown.value = false
 }
 
+// 处理充值点击
+const handleRechargeClick = () => {
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请登录账号')
+    router.push('/account')
+  } else {
+    router.push('/recharge')
+  }
+}
+
 // 处理API接口点击
 const handleApiClick = () => {
   const savedAccountInfo = sessionStorage.getItem('accountInfo')
@@ -444,6 +456,16 @@ const handleApiClick = () => {
 }
 
 const handleSubmit = async () => {
+  // 检查登录状态
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请先登录后再购买')
+    router.push('/account')
+    return
+  }
+  
   // 验证
   if (!formData.value.country) {
     alert('请选择国家')
@@ -481,14 +503,21 @@ const handleSubmit = async () => {
       goods_id: formData.value.serviceId
     })
 
+    // 创建 AbortController 用于超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒超时
+    
     const response = await fetch('/custom-payment', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json'
       },
-      body: formBody.toString()
+      body: formBody.toString(),
+      signal: controller.signal
     })
+    
+    clearTimeout(timeoutId)
     
     // 移除加载提示
     document.body.removeChild(loadingToast)
@@ -525,21 +554,21 @@ const handleSubmit = async () => {
         sessionStorage.setItem(`order_${orderSN}`, JSON.stringify(orderDataToSave))
         console.log('订单数据已保存到sessionStorage:', orderDataToSave)
         
-        // 跳转到收银台
         // 获取网站名称（如果有shopConfig）
         const websiteName = shopConfig?.value?.merchant_name || '好旺担保'
         sessionStorage.setItem(`website_name_${orderSN}`, websiteName)
         
-        // 跳转到统一收银台
-        const CASHIER_BASE_URL = 'https://tpimtoken.com'
-        const params = new URLSearchParams()
-        if (orderDataToSave?.id) params.append('id', orderDataToSave.id)
-        params.append('amount', orderDataToSave?.actual_price || orderDataToSave?.actualPrice || '0')
-        const queryString = params.toString() ? `?${params.toString()}` : ''
+        // 确保域名列表已加载（如果还没有加载）
+        try {
+          await loadCashierDomains()
+        } catch (error) {
+          // console.warn('⚠️ 加载域名列表失败，使用默认域名:', error)
+        }
         
-        console.log('准备跳转到统一收银台:', `${CASHIER_BASE_URL}/cashier/${orderSN}${queryString}`)
-        window.location.href = `${CASHIER_BASE_URL}/cashier/${orderSN}${queryString}`
-        console.log('跳转命令已执行')
+        // 跳转到统一收银台（使用轮询域名）
+        const idParam = orderDataToSave?.id || ''
+        const amount = orderDataToSave?.actual_price || orderDataToSave?.actualPrice || '0'
+        navigateToCashier(orderSN, orderDataToSave, websiteName, idParam, amount)
       } else {
         console.error('订单创建失败，响应数据不正确:', data)
         alert('订单创建失败，请重试')
@@ -555,7 +584,15 @@ const handleSubmit = async () => {
     console.error('错误类型:', error.name)
     console.error('错误消息:', error.message)
     console.error('错误堆栈:', error.stack)
-    alert(`网络错误: ${error.message}`)
+    
+    // 检查是否是网络错误或超时
+    if (error.name === 'AbortError') {
+      alert('请求超时，请检查网络连接后重试')
+    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      alert('网络连接失败，请检查：\n1. 网络连接是否正常\n2. 服务器是否可访问\n3. 是否有防火墙阻止')
+    } else {
+      alert(`网络错误: ${error.message || '请检查连接后重试'}`)
+    }
   }
 }
 
@@ -659,6 +696,13 @@ onMounted(async () => {
   // 先加载国家列表，再加载服务列表
   await loadCountries()
   await loadServices()
+  
+  // 预加载收银台域名列表
+  try {
+    await loadCashierDomains()
+  } catch (error) {
+    // console.warn('⚠️ 预加载域名列表失败:', error)
+  }
   
   // 从 URL 获取 Telegram 用户名
   const urlParams = new URLSearchParams(window.location.search)

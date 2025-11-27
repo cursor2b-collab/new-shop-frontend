@@ -101,7 +101,7 @@ function confirmPayment() {
 async function createPayment() {
   try {
     // 调用后端支付接口
-    const response = await fetch('https://sisn113.cc/api/create-payment', {
+    const response = await fetch('https://vps.boltcode.vip/api/create-payment', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

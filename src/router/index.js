@@ -15,12 +15,14 @@ const routes = [
   {
     path: '/recharge',
     name: 'Recharge',
-    component: RechargePage
+    component: RechargePage,
+    meta: { requiresAuth: true }
   },
   {
     path: '/orders',
     name: 'Orders',
-    component: OrdersPage
+    component: OrdersPage,
+    meta: { requiresAuth: true }
   },
   {
     path: '/account',
@@ -59,8 +61,17 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth) {
     const savedAccountInfo = sessionStorage.getItem('accountInfo')
-    if (!savedAccountInfo) {
-      alert('请先登录后再访问此页面')
+    const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+    
+    if (!savedAccountInfo || isLoggedIn !== 'true') {
+      // 根据不同页面显示不同提示
+      if (to.path === '/recharge') {
+        alert('请登录账号')
+      } else if (to.path === '/orders') {
+        alert('请登录账号')
+      } else {
+        alert('请先登录后再访问此页面')
+      }
       next('/account')
     } else {
       next()

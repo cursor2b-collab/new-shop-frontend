@@ -5,19 +5,41 @@
     <!-- 导航标签栏 -->
     <div class="nav-tabs">
       <div class="nav-tab" @click="$router.push('/')">首页</div>
-      <div class="nav-tab" @click="$router.push('/recharge')">充值</div>
-      <div class="nav-tab" @click="$router.push('/orders')">我的订单</div>
+      <div class="nav-tab" @click="handleRechargeClick">充值</div>
+      <div class="nav-tab" @click="handleOrdersClick">我的订单</div>
       <div class="nav-tab active">账户</div>
       <div class="nav-tab" @click="handleApiClick">API接口</div>
     </div>
     
-    <!-- 登录前：登录表单 -->
+    <!-- 登录前：登录/注册表单 -->
     <div v-if="!isLoggedIn" class="main">
       <p class="main-title-green">
         <span class="el-tag el-tag--success el-tag--large el-tag--dark">
-          <span class="el-tag__content">欢迎登录</span>
+          <span class="el-tag__content">{{ isRegisterMode ? '欢迎注册' : '欢迎登录' }}</span>
         </span>
       </p>
+      
+      <!-- 登录/注册切换 -->
+      <div style="margin-bottom: 20px; display: flex; gap: 10px; border-bottom: 1px solid #e4e7ed; padding-bottom: 15px;">
+        <button 
+          type="button" 
+          class="el-button" 
+          :class="{ 'el-button--primary': !isRegisterMode }"
+          style="flex: 1"
+          @click="isRegisterMode = false"
+        >
+          <span class="el-button__text">登录</span>
+        </button>
+        <button 
+          type="button" 
+          class="el-button" 
+          :class="{ 'el-button--primary': isRegisterMode }"
+          style="flex: 1"
+          @click="isRegisterMode = true"
+        >
+          <span class="el-button__text">注册</span>
+        </button>
+      </div>
       
       <div class="el-form-item is-required asterisk-left el-form-item--feedback" style="margin-top: 15px;">
         <div class="el-form-item__label">用户名</div>
@@ -30,6 +52,24 @@
                 autocomplete="off" 
                 placeholder="请输入用户名" 
                 v-model="loginForm.username"
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 注册时显示邮箱字段 -->
+      <div v-if="isRegisterMode" class="el-form-item is-required asterisk-left el-form-item--feedback" style="margin-top: 15px;">
+        <div class="el-form-item__label">邮箱</div>
+        <div class="el-form-item__content">
+          <div class="el-input">
+            <div class="el-input__wrapper">
+              <input 
+                class="el-input__inner" 
+                type="email" 
+                autocomplete="off" 
+                placeholder="请输入邮箱地址" 
+                v-model="loginForm.email"
               >
             </div>
           </div>
@@ -53,11 +93,23 @@
         </div>
       </div>
       
-      <div style="margin-top: 20px; display: flex; gap: 10px;">
-        <button type="button" class="el-button el-button--success el-button--large" style="flex: 1" @click="handleLogin">
+      <div style="margin-top: 20px;">
+        <button 
+          v-if="!isRegisterMode"
+          type="button" 
+          class="el-button el-button--success el-button--large" 
+          style="width: 100%" 
+          @click="handleLogin"
+        >
           <span class="el-button__text">登录</span>
         </button>
-        <button type="button" class="el-button el-button--primary el-button--large" style="flex: 1" @click="handleRegister">
+        <button 
+          v-else
+          type="button" 
+          class="el-button el-button--primary el-button--large" 
+          style="width: 100%" 
+          @click="handleRegister"
+        >
           <span class="el-button__text">注册</span>
         </button>
       </div>
@@ -217,15 +269,19 @@ import { supabase } from '../lib/supabase'
 
 const router = useRouter()
 
-// Banner图片
-const bannerImage = ref('https://jm273.cc/static/images/be7fa42546e73d642a19b19a8dcb6fa4.gif')
+// Banner图片 - 使用指定的GIF图片
+const bannerImage = ref('https://cy-747263170.imgix.net/GIF_20251120065910817.gif')
 
 // 登录状态
 const isLoggedIn = ref(false)
 
+// 注册/登录模式切换
+const isRegisterMode = ref(false)
+
 // 登录表单
 const loginForm = ref({
   username: '',
+  email: '',
   password: ''
 })
 
@@ -508,38 +564,98 @@ const handleLogin = async () => {
   }
   
   try {
-    // 使用Supabase登录（支持邮箱或用户名登录）
-    // 首先尝试作为邮箱登录
-    let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: loginForm.value.username.includes('@') 
-        ? loginForm.value.username 
-        : `${loginForm.value.username}@temp.com`, // 如果不是邮箱，尝试添加临时域名
-      password: loginForm.value.password
-    })
+    let authData = null
+    let authError = null
     
-    // 如果失败，尝试查询user_profiles表找到对应的邮箱
-    if (authError && !loginForm.value.username.includes('@')) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('email')
-        .eq('username', loginForm.value.username)
-        .single()
+    // 策略1: 如果输入包含@，直接作为邮箱登录
+    if (loginForm.value.username.includes('@')) {
+      const result = await supabase.auth.signInWithPassword({
+        email: loginForm.value.username,
+        password: loginForm.value.password
+      })
+      authData = result.data
+      authError = result.error
+    } else {
+      // 策略2: 先尝试 username@temp.com（注册时可能使用的格式）
+      const tempEmail = `${loginForm.value.username}@temp.com`
+      let result = await supabase.auth.signInWithPassword({
+        email: tempEmail,
+        password: loginForm.value.password
+      })
+      authData = result.data
+      authError = result.error
       
-      if (profile && profile.email) {
-        const { data: retryAuthData, error: retryAuthError } = await supabase.auth.signInWithPassword({
-          email: profile.email,
-          password: loginForm.value.password
-        })
+      // 策略3: 如果失败，从user_profiles表查找对应的邮箱
+      if (authError) {
+        console.log('尝试从user_profiles查找邮箱...')
+        const { data: profiles, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('email, username')
+          .eq('username', loginForm.value.username)
         
-        if (!retryAuthError) {
-          authData = retryAuthData
-          authError = null
+        if (!profileError && profiles && profiles.length > 0) {
+          // 找到匹配的用户名，尝试使用对应的邮箱登录
+          for (const profile of profiles) {
+            if (profile.email) {
+              console.log(`尝试使用邮箱登录: ${profile.email}`)
+              result = await supabase.auth.signInWithPassword({
+                email: profile.email,
+                password: loginForm.value.password
+              })
+              
+              if (!result.error) {
+                authData = result.data
+                authError = null
+                break
+              }
+            }
+          }
+        }
+        
+        // 策略4: 如果还是失败，尝试从auth.users中查找（通过user_metadata.username）
+        if (authError) {
+          console.log('尝试从auth.users查找...')
+          // 注意：Supabase客户端无法直接查询auth.users表
+          // 但我们可以尝试一些常见的邮箱格式
+          const commonDomains = ['@temp.com', '@gmail.com', '@qq.com', '@163.com', '@outlook.com']
+          for (const domain of commonDomains) {
+            const testEmail = `${loginForm.value.username}${domain}`
+            result = await supabase.auth.signInWithPassword({
+              email: testEmail,
+              password: loginForm.value.password
+            })
+            
+            if (!result.error) {
+              authData = result.data
+              authError = null
+              break
+            }
+          }
         }
       }
     }
     
     if (authError) {
-      alert(`登录失败: ${authError.message}`)
+      console.error('登录失败详情:', authError)
+      
+      // 提供更友好的错误提示
+      let errorMessage = '登录失败'
+      if (authError.message.includes('Invalid login credentials')) {
+        errorMessage = '用户名或密码错误'
+      } else if (authError.message.includes('Email not confirmed')) {
+        errorMessage = '请先确认邮箱后再登录（检查您的邮箱收件箱）'
+      } else if (authError.message.includes('User not found')) {
+        errorMessage = '用户不存在，请先注册'
+      } else {
+        errorMessage = authError.message || '登录失败，请检查用户名和密码'
+      }
+      
+      alert(errorMessage)
+      return
+    }
+    
+    if (!authData || !authData.user) {
+      alert('登录失败：无法获取用户信息')
       return
     }
     
@@ -602,6 +718,19 @@ const handleRegister = async () => {
     return
   }
   
+  // 验证邮箱（注册时必须提供）
+  if (!loginForm.value.email || !loginForm.value.email.trim()) {
+    alert('请输入邮箱地址')
+    return
+  }
+  
+  // 验证邮箱格式
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(loginForm.value.email.trim())) {
+    alert('请输入有效的邮箱地址')
+    return
+  }
+  
   // 验证密码长度
   if (loginForm.value.password.length < 6) {
     alert('密码长度至少6位')
@@ -609,10 +738,8 @@ const handleRegister = async () => {
   }
   
   try {
-    // 生成邮箱（如果用户名不是邮箱格式）
-    const email = loginForm.value.username.includes('@') 
-      ? loginForm.value.username 
-      : `${loginForm.value.username}@temp.com`
+    // 使用用户输入的邮箱
+    const email = loginForm.value.email.trim()
     
     // 使用Supabase注册
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -628,7 +755,8 @@ const handleRegister = async () => {
     // 检查错误类型
     if (authError) {
       // 如果是用户已存在的错误，尝试直接登录
-      if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
+      if (authError.message.includes('already registered') || authError.message.includes('already exists') || authError.message.includes('User already registered')) {
+        console.log('用户已存在，尝试直接登录...')
         // 用户已存在，尝试登录
         const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
           email: email,
@@ -636,7 +764,13 @@ const handleRegister = async () => {
         })
         
         if (loginError) {
-          alert(`用户已存在，但登录失败: ${loginError.message}`)
+          let errorMsg = '用户已存在，但登录失败'
+          if (loginError.message.includes('Email not confirmed')) {
+            errorMsg = '用户已存在，但邮箱未确认。请检查您的邮箱并点击确认链接后再登录'
+          } else {
+            errorMsg = `用户已存在，但登录失败: ${loginError.message}`
+          }
+          alert(errorMsg)
           return
         }
         
@@ -646,13 +780,29 @@ const handleRegister = async () => {
           return
         }
       } else {
-        alert(`注册失败: ${authError.message}`)
+        let errorMsg = authError.message
+        if (authError.message.includes('Password')) {
+          errorMsg = '密码不符合要求（至少6位）'
+        } else if (authError.message.includes('Email')) {
+          errorMsg = '邮箱格式不正确'
+        }
+        alert(`注册失败: ${errorMsg}`)
         return
       }
     }
     
     // 注册成功
     if (authData.user) {
+      // 检查是否需要邮箱确认
+      if (authData.session === null) {
+        // 没有session，说明需要邮箱确认
+        alert('注册成功！请检查您的邮箱（包括垃圾邮件文件夹）并点击确认链接。确认后即可登录。\n\n如果您使用的是临时邮箱（@temp.com），请联系管理员。')
+        // 清空表单并切换到登录模式
+        loginForm.value = { username: '', email: '', password: '' }
+        isRegisterMode.value = false
+        return
+      }
+      
       // 获取用户IP
       const userIP = await getUserIP()
       const registerTime = new Date().toISOString()
@@ -707,6 +857,8 @@ const handleRegister = async () => {
       
       // 开始检查
       setTimeout(checkProfile, 500)
+    } else {
+      alert('注册失败：无法创建用户账户')
     }
   } catch (error) {
     console.error('注册失败:', error)
@@ -731,8 +883,9 @@ const loadAndSetUserInfo = async (userId) => {
       sessionStorage.setItem('accountInfo', JSON.stringify(accountInfo.value))
       sessionStorage.setItem('userId', userId)
       
-      // 清空登录表单
-      loginForm.value = { username: '', password: '' }
+      // 清空登录表单并切换到登录模式
+      loginForm.value = { username: '', email: '', password: '' }
+      isRegisterMode.value = false
       
       // 提示成功
       alert('注册成功！已自动登录')
@@ -784,7 +937,8 @@ const handleLogout = async () => {
       }
       
       isLoggedIn.value = false
-      loginForm.value = { username: '', password: '' }
+      isRegisterMode.value = false
+      loginForm.value = { username: '', email: '', password: '' }
       accountInfo.value = {
         username: '',
         balance: '',
@@ -803,6 +957,32 @@ const handleLogout = async () => {
       isLoggedIn.value = false
       sessionStorage.clear()
     }
+  }
+}
+
+// 处理充值点击
+const handleRechargeClick = () => {
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请登录账号')
+    router.push('/account')
+  } else {
+    router.push('/recharge')
+  }
+}
+
+// 处理我的订单点击
+const handleOrdersClick = () => {
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请登录账号')
+    // 已在账户页面，不需要跳转
+  } else {
+    router.push('/orders')
   }
 }
 

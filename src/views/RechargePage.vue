@@ -6,7 +6,7 @@
     <div class="nav-tabs">
       <div class="nav-tab" @click="$router.push('/')">首页</div>
       <div class="nav-tab active">充值</div>
-      <div class="nav-tab" @click="$router.push('/orders')">我的订单</div>
+      <div class="nav-tab" @click="handleOrdersClick">我的订单</div>
       <div class="nav-tab" @click="$router.push('/account')">账户</div>
       <div class="nav-tab" @click="handleApiClick">API接口</div>
     </div>
@@ -68,13 +68,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { loadCashierDomains, navigateToCashier } from '../config/cashier.js'
 
 const router = useRouter()
 
-// Banner图片
-const bannerImage = ref('https://jm273.cc/static/images/be7fa42546e73d642a19b19a8dcb6fa4.gif')
+// Banner图片 - 使用指定的GIF图片
+const bannerImage = ref('https://cy-747263170.imgix.net/GIF_20251120065910817.gif')
 
 // 充值数量
 const rechargeAmount = ref(1)
@@ -115,6 +116,19 @@ const closeWarningMessage = () => {
   showWarningMessage.value = false
 }
 
+// 处理我的订单点击
+const handleOrdersClick = () => {
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请登录账号')
+    router.push('/account')
+  } else {
+    router.push('/orders')
+  }
+}
+
 // 处理API接口点击
 const handleApiClick = () => {
   const savedAccountInfo = sessionStorage.getItem('accountInfo')
@@ -127,11 +141,141 @@ const handleApiClick = () => {
 }
 
 // 处理充值
-const handleRecharge = () => {
-  console.log('充值金额:', rechargeAmount.value)
-  // TODO: 实现充值逻辑
-  alert(`准备充值 ${rechargeAmount.value} USDT`)
+const handleRecharge = async () => {
+  // 检查登录状态
+  const savedAccountInfo = sessionStorage.getItem('accountInfo')
+  const isLoggedIn = sessionStorage.getItem('isLoggedIn')
+  
+  if (!savedAccountInfo || isLoggedIn !== 'true') {
+    alert('请登录账号')
+    router.push('/account')
+    return
+  }
+  
+  // 验证充值金额
+  if (!rechargeAmount.value || rechargeAmount.value < 1) {
+    alert('请输入有效的充值金额（最小1 USDT）')
+    return
+  }
+  
+  try {
+    // 显示加载提示
+    const loadingToast = document.createElement('div')
+    loadingToast.textContent = '正在创建充值订单...'
+    loadingToast.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px;'
+    document.body.appendChild(loadingToast)
+    
+    console.log('开始创建充值订单，金额:', rechargeAmount.value)
+    
+    // 准备订单数据
+    const formBody = new URLSearchParams({
+      title: `余额充值 ${rechargeAmount.value} USDT`,
+      price: rechargeAmount.value.toString(),
+      amount: 1,
+      pay_amount: rechargeAmount.value.toString(),
+      email: '',
+      img_path: 'https://jm273.cc/static/images/be7fa42546e73d642a19b19a8dcb6fa4.gif',
+      type: 'recharge'  // 标记为充值订单
+    })
+
+    // 创建 AbortController 用于超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒超时
+    
+    // 调用创建订单接口
+    const response = await fetch('/custom-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: formBody.toString(),
+      signal: controller.signal
+    })
+    
+    clearTimeout(timeoutId)
+    
+    // 移除加载提示
+    document.body.removeChild(loadingToast)
+    
+    console.log('订单创建响应状态:', response.status)
+
+    if (response.ok) {
+      const data = await response.json()
+      console.log('充值订单创建响应:', data)
+      
+      if (data.success && data.url) {
+        // 从URL中提取订单号
+        const orderSN = data.url.split('/').pop()
+        console.log('充值订单号:', orderSN)
+        
+        // 保存订单数据到 sessionStorage
+        const orderDataToSave = {
+          orderSN: orderSN,
+          title: `余额充值 ${rechargeAmount.value} USDT`,
+          productName: `余额充值`,
+          buy_amount: 1,
+          quantity: 1,
+          unitPrice: rechargeAmount.value.toString(),
+          actual_price: rechargeAmount.value.toString(),
+          actualPrice: rechargeAmount.value.toString(),
+          type: 'recharge',
+          // 保存 id 参数（从 URL 获取）
+          id: new URLSearchParams(window.location.search).get('id') || ''
+        }
+        
+        sessionStorage.setItem(`order_${orderSN}`, JSON.stringify(orderDataToSave))
+        console.log('充值订单数据已保存到sessionStorage:', orderDataToSave)
+        
+        // 保存网站名称
+        const websiteName = '好旺担保'
+        sessionStorage.setItem(`website_name_${orderSN}`, websiteName)
+        
+        // 确保域名列表已加载（如果还没有加载）
+        try {
+          await loadCashierDomains()
+        } catch (error) {
+          // console.warn('⚠️ 加载域名列表失败，使用默认域名:', error)
+        }
+        
+        // 跳转到统一收银台（使用轮询域名）
+        const idParam = orderDataToSave.id || ''
+        const amount = orderDataToSave.actual_price || ''
+        navigateToCashier(orderSN, orderDataToSave, websiteName, idParam, amount)
+      } else {
+        console.error('订单创建失败，响应数据不正确:', data)
+        alert('充值订单创建失败，请重试')
+      }
+    } else {
+      const errorText = await response.text()
+      console.error('创建订单失败，HTTP状态:', response.status)
+      console.error('错误响应:', errorText)
+      alert(`创建订单失败(${response.status})，请重试`)
+    }
+  } catch (error) {
+    console.error('创建充值订单异常:', error)
+    console.error('错误类型:', error.name)
+    console.error('错误消息:', error.message)
+    
+    // 检查是否是网络错误或超时
+    if (error.name === 'AbortError') {
+      alert('请求超时，请检查网络连接后重试')
+    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      alert('网络连接失败，请检查：\n1. 网络连接是否正常\n2. 服务器是否可访问\n3. 是否有防火墙阻止')
+    } else {
+      alert(`网络错误: ${error.message || '请检查连接后重试'}`)
+    }
+  }
 }
+
+// 组件挂载时预加载收银台域名列表
+onMounted(async () => {
+  try {
+    await loadCashierDomains()
+  } catch (error) {
+    // console.warn('⚠️ 预加载域名列表失败:', error)
+  }
+})
 </script>
 
 <style>
